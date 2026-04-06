@@ -1,0 +1,26 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Conda / virtual envs
+.env
+.venv
+venv/
+env/
+
+# Editor settings
+.vscode/
+.idea/
+
+# Temporary logs
+*.log
+
+# OS / misc
+Thumbs.db
