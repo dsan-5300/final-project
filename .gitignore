@@ -24,3 +24,6 @@ env/
 
 # OS / misc
 Thumbs.db
+
+# Personal helper scripts
+git.sh
