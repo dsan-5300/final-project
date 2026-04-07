@@ -25,7 +25,7 @@ FILES = {
 
 
 def download_nhanes() -> pd.DataFrame:
-    """Download all four NHANES files and left-join on SEQN."""
+    # a left join is used to keep all participants with demographics (the base file) and add oral health data where available
     dfs = {}
     for name, filename in FILES.items():
         url = BASE_URL + filename
@@ -47,11 +47,11 @@ def download_nhanes() -> pd.DataFrame:
 # ─────────────────────────────────────────────────────────────────────────────
 
 ADMIN_DROP_COLS = [
-    "SDDSRVYR",   # data release cycle (constant for this file)
-    "RIDEXMON",   # six-month exam period
-    "RIDAGEMN",   # age in months (redundant with RIDAGEYR for adults)
-    "RIDEXAGM",   # age in months at exam (only for <19)
-    "SIALANG", "SIAPROXY", "SIAINTRP",   # interview language/proxy flags
+    "SDDSRVYR", # data release cycle (constant)
+    "RIDEXMON", # six-month exam period
+    "RIDAGEMN", # age in months (redundant)
+    "RIDEXAGM", # age in months at exam (only for <19, and we are using 20+)
+    "SIALANG", "SIAPROXY", "SIAINTRP",  # interview language/proxy flags
     "FIALANG", "FIAPROXY", "FIAINTRP",
     "MIALANG", "MIAPROXY", "MIAINTRP",
     "AIALANGA",
@@ -59,20 +59,16 @@ ADMIN_DROP_COLS = [
 
 
 def clean(df: pd.DataFrame) -> pd.DataFrame:
-    """Filter to examined adults 20+, drop admin cols, impute PIR."""
-
     # Keep only participants who completed interview AND MEC exam
     df = df[df["RIDSTATR"] == 2].copy()
     print(f"  After RIDSTATR==2 filter: {df.shape[0]:,} rows")
-
-    # Drop administrative columns
+    # Drop admin cols
     df = df.drop(columns=[c for c in ADMIN_DROP_COLS if c in df.columns])
-
-    # Restrict to adults 20+
+    # adults 20+ only because they have stable dentition and relevant data
     df = df[df["RIDAGEYR"] >= 20].copy()
     print(f"  Adults 20+: {df.shape[0]:,} rows, {df.shape[1]} cols")
 
-    # INDFMPIR: clip near-zero float artifacts to 0, median-impute missing
+    # INDFMPIR has near-zero floats so we set to 0 and median-impute missing values
     df["INDFMPIR"] = df["INDFMPIR"].clip(lower=0)
     median_pir = df["INDFMPIR"].median()
     df["INDFMPIR"] = df["INDFMPIR"].fillna(median_pir)
@@ -82,11 +78,11 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. FEATURE ENGINEERING
+# FEATURE ENGINEERING
 # ─────────────────────────────────────────────────────────────────────────────
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Build tooth-count, caries, and derived features from raw exam data."""
+    # tooth-count, caries, and derived features from raw exam data
 
     # ── Tooth count features (OHXnnTC — numeric codes) ──
     # 2 / 5 = permanent tooth present, 3 = implant, 4 = missing/extracted
@@ -97,21 +93,22 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df["teeth_missing"] = (df[tc_cols] == 4).sum(axis=1)
     df["teeth_implant"] = (df[tc_cols] == 3).sum(axis=1)
 
-    # ── Coronal caries features (OHXnnCTC — letter codes) ──
+    # Coronal caries features
     # P = decayed, J/Q = filled+decayed, F = filled sound,
     # E = missing (caries), S/Z = sound/sealant, R = root tip
-    ctc_cols = [c for c in df.columns
-                if c.startswith("OHX") and c.endswith("CTC")]
+    ctc_cols = [c for c in df.columns # only the OHXnnCTC columns, not the OHXnnTC used for tooth counts
+                if c.startswith("OHX") and c.endswith("CTC")] # caries status columns
 
-    df["teeth_decayed"]        = df[ctc_cols].isin(["P"]).sum(axis=1)
-    df["teeth_filled_decayed"] = df[ctc_cols].isin(["J", "Q"]).sum(axis=1)
-    df["teeth_filled_sound"]   = df[ctc_cols].isin(["F"]).sum(axis=1)
-    df["teeth_missing_caries"] = df[ctc_cols].isin(["E"]).sum(axis=1)
-    df["teeth_sound"]          = df[ctc_cols].isin(["S", "Z"]).sum(axis=1)
-    df["teeth_root_tip"]       = df[ctc_cols].isin(["R"]).sum(axis=1)
+    df["teeth_decayed"] = df[ctc_cols].isin(["P"]).sum(axis=1) # sum of all teeth with untreated decay
+    df["teeth_filled_decayed"] = df[ctc_cols].isin(["J", "Q"]).sum(axis=1) # sum of all teeth with treated decay (filled) but still has active decay
+    df["teeth_filled_sound"] = df[ctc_cols].isin(["F"]).sum(axis=1) # sum of all teeth with filled restorations that are currently sound (no active decay)
+    df["teeth_missing_caries"] = df[ctc_cols].isin(["E"]).sum(axis=1) # sum of all teeth missing due to caries (extracted because of decay, not other reasons)
+    df["teeth_sound"] = df[ctc_cols].isin(["S", "Z"]).sum(axis=1) # sum of all teeth that are sound (no decay) or have sealants (preventive, not decayed)
+    df["teeth_root_tip"] = df[ctc_cols].isin(["R"]).sum(axis=1) # sum of all teeth with root tips (severe decay leading to root exposure, often a precursor to extraction)
 
-    # ── Derived summary features ──
-    # Classic DMFT: Decayed + Missing(caries) + Filled
+    # summary features
+    # Classic DMF Teeth (DMFT) score counts the total number of Decayed, Missing (due to caries), and Filled Teeth
+    # Decayed + Missing(caries) + Filled
     df["dmft_score"] = (
         df["teeth_decayed"]
         + df["teeth_filled_decayed"]
@@ -119,7 +116,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         + df["teeth_filled_sound"]
     )
 
-    # Total active decay burden
+    # Total active decay (called burden)
     df["total_decay_burden"] = df["teeth_decayed"] + df["teeth_filled_decayed"]
 
     # Untreated decay ratio
@@ -128,7 +125,9 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         df["total_decay_burden"] / total_assessed.replace(0, np.nan)
     )
 
-    # Treatment ratio (access-to-care proxy)
+    # Treatment ratio 
+    # access-to-care proxy because it reflects the proportion of teeth that have
+    # received treatment out of those that have ever had decay (decayed + filled decayed + filled sound)
     ever_decayed = (
         df["teeth_decayed"]
         + df["teeth_filled_decayed"]
@@ -145,16 +144,19 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. TARGET VARIABLES
+# TARGET VARS
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_targets(df: pd.DataFrame) -> pd.DataFrame:
-    """Create binary and continuous target variables."""
+    # make binary targets for poor self-rated oral health
+    # and clinically needing care, and keep DMFT score as a continuous target
 
-    # Target 1 — Poor self-rated oral health (OHQ845 >= 4 → Fair/Poor)
+    # Target 1
+    # Poor self-rated oral health (OHQ845 >= 4 → Fair/Poor)
     df["target_poor_selfrated"] = (df["OHQ845"] >= 4).astype(int)
 
-    # Target 2 — Clinically needs dental care (OHAREC < 4 → any referral)
+    # Target 2
+    # Clinically needs dental care (OHAREC < 4 → any referral)
     # .where() preserves NaN for missing OHAREC instead of coding them as 0
     df["target_needs_care"] = (
         (df["OHAREC"] < 4)
@@ -162,8 +164,9 @@ def create_targets(df: pd.DataFrame) -> pd.DataFrame:
         .astype("Int64")
     )
 
-    # Target 3 — DMFT score (already created in feature engineering)
-
+    # Target 3 
+    # DMFT score
+    # already created in feature engineering as df["dmft_score"], so no changes needed here
     pos_self = df["target_poor_selfrated"].mean()
     pos_care = df["target_needs_care"].mean()
     care_missing = df["target_needs_care"].isna().sum()
@@ -173,9 +176,9 @@ def create_targets(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. RENAME COLUMNS
+# RENAME COLUMNS
 # ─────────────────────────────────────────────────────────────────────────────
-
+# AI CODE GENERATION NOTE: AI was used to help generate the static _RENAME_MAP and the regex patterns in _TOOTH_PATTERNS,
 # Static mapping for non-tooth-level columns
 _RENAME_MAP = {
     # ── Demographics ──
@@ -277,21 +280,23 @@ _RENAME_MAP = {
     "OHAROTH":   "referral_other_finding",
     "OHAPOS":    "exam_position_recumbent",
 }
+# END AI CODE
 
-# Regex patterns for tooth-level columns (handled programmatically)
+
+# Regex patterns for tooth level columns
 _TOOTH_PATTERNS = {
-    # pattern             →  prefix template (tooth number inserted)
-    r"^OHX(\d{2})TC$":      "tooth_{}_status",
-    r"^OHX(\d{2})CTC$":     "tooth_{}_caries",
-    r"^OHX(\d{2})CSC$":     "tooth_{}_surface_condition",
-    r"^OHX(\d{2})RTC$":     "tooth_{}_restoration_type",
-    r"^OHX(\d{2})RSC$":     "tooth_{}_restoration_surface",
-    r"^OHX(\d{2})SE$":      "tooth_{}_sealant",
+    # pattern -> prefix template (tooth number)
+    r"^OHX(\d{2})TC$": "tooth_{}_status",
+    r"^OHX(\d{2})CTC$": "tooth_{}_caries",
+    r"^OHX(\d{2})CSC$": "tooth_{}_surface_condition",
+    r"^OHX(\d{2})RTC$": "tooth_{}_restoration_type",
+    r"^OHX(\d{2})RSC$": "tooth_{}_restoration_surface",
+    r"^OHX(\d{2})SE$": "tooth_{}_sealant",
 }
 
 
 def _build_tooth_rename(columns: list[str]) -> dict[str, str]:
-    """Generate readable names for tooth-level OHX columns."""
+    # map names like OHX01TC, OHX01CTC, etc. to tooth_01_status, tooth_01_caries, etc. for all 32 teeth and all relevant column types
     mapping = {}
     for col in columns:
         for pattern, template in _TOOTH_PATTERNS.items():
@@ -304,9 +309,9 @@ def _build_tooth_rename(columns: list[str]) -> dict[str, str]:
 
 
 def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Rename all NHANES coded columns to readable English names."""
+    # rename the columns to human-readable names using the static map and the tooth-level regex patterns
 
-    # Handle OHDEXSTS which may appear with merge suffixes
+    # handle some special cases that have multiple versions across files (OHDEXSTS vs OHDEXSTS_x vs OHDEXSTS_y)
     if "OHDEXSTS_x" in df.columns:
         _RENAME_MAP["OHDEXSTS_x"] = "oral_exam_status_dentition"
     if "OHDEXSTS_y" in df.columns:
@@ -314,21 +319,21 @@ def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     if "OHDEXSTS" in df.columns:
         _RENAME_MAP["OHDEXSTS"] = "oral_exam_status"
 
-    # Build tooth-level renames
+    # tooth level names
     tooth_renames = _build_tooth_rename(df.columns.tolist())
 
-    # Combine all renames
+    # combine all renames
     full_map = {**_RENAME_MAP, **tooth_renames}
 
-    # Drop routing/check-item columns that have no analytical value
+    # drop the original coded columns that we have renamed, but only if they exist in the df
     check_items = [c for c in df.columns if re.match(r"^OHQ(550|592|616|846)$", c)]
     df = df.drop(columns=check_items, errors="ignore")
 
-    # Apply renames (only for columns that exist)
+    # Apply
     applicable = {k: v for k, v in full_map.items() if k in df.columns}
     df = df.rename(columns=applicable)
 
-    # Report any columns that didn't get renamed (shouldn't happen, but good to know)
+    # report any columns that still look coded
     still_coded = [c for c in df.columns if re.match(r"^[A-Z]{2,}", c)]
     if still_coded:
         print(f"  Note: {len(still_coded)} columns kept original names: {still_coded[:5]}...")
@@ -339,7 +344,7 @@ def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. MAIN
+# MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
@@ -361,13 +366,13 @@ def main():
     print("\nStep 5/5: Renaming columns...")
     df = rename_columns(df)
 
-    # Save
+    # save csv
     csv_path = os.path.join(output_dir, "nhanes_oral_health_adults.csv")
     df.to_csv(csv_path, index=False)
     print(f"\nSaved: {csv_path}")
     print(f"Final dataset: {df.shape[0]:,} rows x {df.shape[1]} columns")
 
-    # Quick validation
+    # validation
     expected_features = [
         "teeth_present", "teeth_missing", "teeth_implant", "teeth_sound",
         "teeth_decayed", "teeth_filled_decayed", "teeth_filled_sound",
