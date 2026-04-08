@@ -282,7 +282,6 @@ _RENAME_MAP = {
 }
 # END AI CODE
 
-
 # Regex patterns for tooth level columns
 _TOOTH_PATTERNS = {
     # pattern -> prefix template (tooth number)
