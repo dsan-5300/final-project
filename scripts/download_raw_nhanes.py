@@ -38,6 +38,7 @@ def download_raw_nhanes(output_dir: str) -> None:
     os.makedirs(output_dir, exist_ok=True) # ensure the output directory exists
     # Loop through each file, download it, convert to pd.DataFrame, and save as CSV
     for name, filename in FILES.items():
+
         url = BASE_URL + filename # construct the full URL for the file
         print(f"Downloading {filename}...")
         df = fetch_xpt(url) # download the file
@@ -53,7 +54,6 @@ def main():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     # assumes the script is located at scripts/download_raw_nhanes.py
     output_dir = os.path.join(project_root, "data", "raw")
-
     print("Downloading raw NHANES files (no cleaning or transformation)...")
     download_raw_nhanes(output_dir)
     print("\nDone. All four raw CSVs saved to:", output_dir)
