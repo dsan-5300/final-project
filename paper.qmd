@@ -1,0 +1,91 @@
+---
+title: "Predicting Oral Health Outcomes from Socioeconomic and Access-to-Care Features in U.S. Adults: A Statistical Learning Analysis of the 2017--2018 NHANES Cycle"
+date: today
+abstract: |
+  Oral diseases affect an estimated 3.7 billion people worldwide and are among the most common chronic health conditions. They are also unevenly distributed, with lower-income populations often experiencing worse outcomes. In the United States, these disparities are especially clear, as oral disease rates, access to dental care, and treatment outcomes are strongly associated with income, education, and race. Using data from the 2017–2018 National Health and Nutrition Examination Survey (NHANES), we created a dataset of 5,265 adults aged 20 and older. The dataset combined demographic, socioeconomic, behavioral, and clinical dental examination records. We then compared several supervised statistical learning methods across three prediction tasks: (1) whether an adult rated their oral health as fair or poor, (2) whether an NHANES examiner recommended any level of dental care, and (3) whether the continuous Decayed-Missing-Filled-Teeth (DMFT) score could be predicted using only socioeconomic and access-related variables. Our approach spanned both shallow learning methods (regularized linear models, random forests, gradient-boosted trees) and a parallel deep learning track using feedforward neural networks, and running the two families side by side was a valuable part of the process for understanding which modeling choices this problem actually rewards. Across all three tasks, gradient-boosted trees (XGBoost) performed better than both a regularized linear model and a random forest. The model achieved a cross-validated ROC-AUC of 0.849 for predicting self-rated poor oral health and 0.844 for predicting clinician-identified need for care. For DMFT prediction, a two-stage regression model first identified individuals without any natural teeth (endentulous individuals) and then estimated DMFT among those with teeth (non-endentulous individuals), reducing mean absolute error from a baseline of 6.98 to 4.67 teeth. Feature-importance analysis consistently identified income-to-poverty ratio, age, time since last dental visit, and cost-related barriers to care as the strongest predictors of poor oral-health outcomes. These findings show that major oral-health disparities among U.S. adults can be predicted using a relatively small set of commonly collected socioeconomic variables. They also demonstrate that careful causal reasoning, prevention of data leakage, and thoughtful feature engineering can influence conclusions drawn from survey data.
+format:
+  pdf:
+    number-sections: false
+    toc: false
+    fontsize: 11pt
+    geometry: margin=1in
+bibliography: references.bib
+---
+
+# Introduction and Literature Review
+
+Oral diseases affect an estimated 3.7 billion people globally and untreated
+dental caries in permanent teeth ranks as the world's most common health
+condition [@who2025oral; @peres2019]. The personal consequences of chronic
+untreated disease (pain, sepsis, functional limitation, and reduced quality
+of life) fall disproportionately on people living in poverty and on socially
+marginalized groups, a pattern that holds across high, middle, and
+low-income countries alike [@peres2019]. In the United States this global
+pattern is especially salient By age 50, the typical U.S. adult has experienced
+caries in about two-thirds of their permanent teeth, and nearly one in nine
+adults aged 20 and older has lost all of their natural teeth [@dye2017]. The
+direct costs of dental disease are sizable. The U.S. spends more than
+\$140 billion per year on dental services. The indirect costs, like lost
+workdays, children missing school, and avoidable emergency-room visits, are even larger [@northridge2020]. Unlike many chronic conditions, oral disease is very preventable through a combination of behavioral, clinical, and structural interventions whose effectiveness is well established. The persistence of the disease burden is often less a question of biomedical reasons and more that of who has access to dental care and who does not.
+
+The socioeconomic down-slope in oral health is among the most established findings in
+public-health research. Adults below the federal poverty line have roughly
+twice the rate of untreated decay of adults earning five or more times the
+poverty threshold. That gap has been stable for two decades
+[@braveman2011; @sabbah2007]. Similar disparities appear across education,
+insurance coverage, and race and ethnicity. Self-rated oral health, which measures patients' own perception of their dental status, shows comparable patterns and is an independent predictor of functional impact, quality of life, and health-care utilization [@locker2007; @slade1997].
+
+The literature on modeling oral-health outcomes from survey data has generally
+used logistic regression with a small number of pre-selected covariates. These
+analyses emphasize interpretable coefficient estimates suitable for determining whether a specific exposure causes a particular health outcome but underutilized two capabilities of modern statistical learning. The first is the ability to discover non-linearity and interactions among many features, and the second, the ability to quantify out-of-sample predictive performance rather than in-sample model fit alone [@islr2021]. Both capabilities matter for policy-facing questions.
+
+This project presents a comparative statistical learning analysis of three oral-health outcomes using a nationally representative sample of U.S. adults. It addresses three related questions. First, how accurately can an adult’s self-rated oral health be predicted using demographic characteristics, socioeconomic status, and reported access to and use of dental care? Second, how accurately can a clinician’s recommendation for dental treatment be predicted using those same variables along with a small set of self-reported oral-health symptoms? Third, how much variation in the continuous Decayed-Missing-Filled-Teeth (DMFT) score, a common overall measure of lifetime dental decay, can be explained using only upstream socioeconomic and access-related predictors, without direct clinical examination data?
+
+To answer these questions, we compare four modeling approaches that span both shallow and deep learning. On the shallow side, a regularized linear model, a random forest, and gradient-boosted trees (XGBoost). On the deep side, a parallel track of feed forward neural networks fit on the same task-oriented features. This comparison helps distinguish patterns that can be captured through simple linear relationships from those that require interactions and non-linear effects, and it lets us see how a deep learning approach behaves on this kind of moderately sized tabular survey data alongside the more traditional methods. We also account for an important feature of the DMFT outcome. Many adults have no remaining natural teeth, creating a concentration of values at the upper limit of the measure. To address this, we use a two-stage regression framework that first models complete tooth loss and then predicts decay burden among adults who still have natural teeth.
+
+The primary goal of this is prediction rather than causal inference. We do not claim that factors such as income or education directly cause poor oral-health outcomes. Instead, we examine how well these well-established associations translate into out-of-sample predictive performance when practical challenges in survey data are properly addressed, including data leakage, class imbalance, structural missingness, and complex sampling design.
+
+# Data Collection
+
+## Source and scope
+
+All data come from the 2017--2018 cycle of the National Health and Nutrition Examination Survey (NHANES), a continuous, nationally representative, cross-sectional survey administered by the National Center for Health Statistics [@nhanes2018]. Each participating adult completes an in-home interview, a Mobile Examination Center (MEC) clinical exam, and a self-administered questionnaire. NHANES releases the corresponding datasets as separate SAS transport files keyed on a common sequence number (`SEQN`). We downloaded four files directly from the public NHANES distribution:
+
+- **DEMO_J** (demographics): age, sex, race and ethnicity, education, marital status, household composition, household income, and the income-to-poverty ratio (IPR).
+- **OHXDEN_J** (oral-health dentition exam): tooth-by-tooth status and caries coding for all 32 tooth positions, plus summary flags for implants and root caries.
+- **OHQ_J** (oral-health questionnaire): self-rated oral health, time since last dental visit, reasons for visits, reported unmet care, and 11 specific barriers-to-care indicators.
+- **OHXREF_J** (oral-health recommendation of care): the examiner's overall recommendation code and diagnosis-specific referral flags.
+
+The four files were merged on `SEQN` with a left join against `DEMO_J` as the anchor.
+
+## Eligibility and filtering
+
+We restricted the merged dataset to adults aged 20 and older who completed both the interview and the MEC exam (NHANES variable `RIDSTATR == 2`). Adults 20+ were chosen because their dentition is stable (they have all of their adult teeth) and because the access-to-care and self-rated health items on the questionnaire are asked only of adult respondents. Applying both filters gives a working datatset of 5,265 adult participants.
+
+## Target variables
+
+We derived three targets from the merged file.
+
+*Target 1 --- Poor self-rated oral health* (`target_poor_selfrated`, binary) was coded 1 for participants whose answer to the NHANES self-rated oral-health item (`OHQ845`) was *Fair* (4) or *Poor* (5) and 0 otherwise. The positive rate in the full sample is 34.4%.
+
+*Target 2 --- Clinician recommendation for care* (`target_needs_care`, binary) was coded 1 when the NHANES examiner issued any care recommendation other than "continue routine care" (`OHAREC < 4`). The observed positive rate is 42.5% among the 5,057 participants with a non-missing recommendation. The remaining 208 participants had a missing recommendation code and were excluded from Task 2 but kept elsewhere.
+
+*Target 3 --- DMFT score* (`dmft_score`, continuous 0--28) was computed from the 28 coronal-caries codes (`OHXnnCTC`) in the dentition exam, summing decayed, filled-decayed, filled-sound, and missing-due-to-caries tooth counts in the classical Klein-Palmer manner [@kleinpalmer1938]. The full-sample mean is 10.74 (SD 8.42, median 9) with a pronounced right-tail mass at 28 corresponding to edentulous adults (no natural teeth).
+
+For convenience, Table 1 summarizes the three prediction tasks referenced throughout the rest of the paper.
+
+| Task    | Outcome (NHANES variable)                                  | Type                              | Sample size | Positive rate / mean |
+|:--------|:-----------------------------------------------------------|:----------------------------------|:-----------:|:--------------------:|
+| **Task 1** | Poor self-rated oral health (`target_poor_selfrated`, derived from `OHQ845`) | Binary classification (1 = *Fair* or *Poor*) | 5,265       | 34.4% positive       |
+| **Task 2** | Clinician recommendation for any care (`target_needs_care`, derived from `OHAREC`) | Binary classification (1 = recommendation other than "continue routine care") | 5,057       | 42.5% positive       |
+| **Task 3** | Decayed-Missing-Filled-Teeth score (`dmft_score`)         | Continuous regression (0--28)     | 5,265       | mean 10.74 (SD 8.42) |
+
+: Quick reference for the three prediction tasks evaluated in this paper. Task 2 excludes 208 participants with a missing examiner recommendation; Tasks 1 and 3 use the full sample. {#tbl-tasks}
+
+## Feature engineering and cleaning
+
+Clinical tooth-level exam codes are poor input to a model in their raw form. We aggregated the 28 `OHXnnCTC` columns and 32 `OHXnnTC` columns into a small set of interpretable summary features: counts of decayed, filled-sound, filled-decayed, missing-due-to-caries, sound, and implanted teeth, a count of teeth present, the  DMFT score, a treatment ratio (filled-sound teeth divided by all teeth that experienced decay at any point) as a proxy for access to restorative care, and a binary `is_edentulous` flag for participants with zero remaining natural teeth (n = 608, 11.5%).
+
+Several NHANES-specific coding conventions required correction before any feature entered a model. The survey encodes a participant's refusal to respond using numeric codes (`7`/`77` for *Refused*, `9`/`99` for *Don't know*) that are numeric and pollute models. We replaced these codes with `NaN` in eleven questionnaire columns.
+
+NHANES encodes yes/no items as `1 = Yes, 2 = No`. We re-coded five columns of this kind to a conventional `{0, 1}` scale, which materially affected the sign and magnitude of logistic-regression coefficients. The income-to-poverty ratio, which carries a small number of near-zero floating-point artifacts and a hard ceiling at 5.0, was clipped to $[0.05, 5.0]$; a log-transformed version was tested but did not improve univariate AUC and was dropped to avoid redundancy. The eleven individual care-barrier items were recoded as binary "reported" flags. The eleven care-barrier items, originally stored as sparse categorical indicators that are populated only for adults who reported *any* unmet need, were re-coded as binary "reported" flags where `NaN` is interpreted as "did not report this barrier".
