@@ -1,6 +1,10 @@
 ---
 title: "Predicting Oral Health Outcomes from Socioeconomic and Access-to-Care Features in U.S. Adults: A Statistical Learning Analysis of the 2017--2018 NHANES Cycle"
-authors: Jieyu Deng, Bryce Grover, Juncheng Han, Jeffrey Pinarchick
+author:
+  - name: Jieyu Deng
+  - name: Bryce Grover
+  - name: Juncheng Han
+  - name: Jeffrey Pinarchick
 date: today
 abstract: |
   Oral diseases affect billions of people worldwide and are among the most common chronic health conditions. In the United States, oral health outcomes, access to dental care, and treatment needs are strongly associated with socioeconomic factors such as income, education, and race. Using data from the 2017 to 2018 National Health and Nutrition Examination Survey, we constructed a dataset of 5,265 adults aged 20 and older that combined demographic, socioeconomic, behavioral, and clinical dental information. We compared supervised statistical learning methods across three tasks: predicting self-rated fair or poor oral health, predicting whether an examiner recommended dental care, and predicting the continuous Decayed, Missing, and Filled Teeth (DMFT) score using only socioeconomic and access-related variables. Across all three tasks, gradient-boosted trees outperformed regularized linear models and random forests. The best model achieved a cross-validated ROC-AUC of 0.849 for self-rated poor oral health and 0.844 for examiner-identified need for care. For DMFT, a two-stage regression approach that first identified edentulous adults and then estimated DMFT among dentate adults reduced mean absolute error from 6.98 to 4.67 teeth. Feature importance analysis showed that income-to-poverty ratio, age, time since last dental visit, and cost-related barriers to care were the strongest predictors across tasks. These results suggest that major oral health disparities among U.S. adults can be predicted using a relatively small set of commonly collected socioeconomic variables.
