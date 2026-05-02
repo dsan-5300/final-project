@@ -142,15 +142,73 @@ For each of the three prediction tasks, we compared three model families, moving
    XGBoost builds its trees sequentially rather than independently, with each new tree focused on the errors made by the previous ones. We used 300 to 500 trees, a learning rate of 0.05, and a maximum depth of 4. For the classification tasks, we set the positive-class weight to the ratio of negative to positive cases to handle imbalance. For Tasks 1 and 2, we ran a randomized hyperparameter search over the number of trees, maximum depth, learning rate, subsample ratio, column-subsample ratio, minimum child weight, and gamma, using 5-fold stratified cross-validation with ROC-AUC as the tuning metric.
 
 4. **Feedforward neural networks (deep learning).**
-   Earlier in the project, we also explored a separate deep learning track that addressed a different question. Instead of predicting oral-health outcomes from social and behavioral factors, this analysis examined whether income could be predicted from dental information alone. We used DMFT as the input and trained three versions of the model: a 14-class model for NHANES household income brackets, a binary model for whether a person was above or below the federal poverty line, and a regression model for the continuous income-to-poverty ratio.
+   Earlier in the project, we also explored a separate deep learning track that addressed a different question. Instead of predicting oral-health outcomes from social and behavioral factors, this analysis examined whether income could be predicted from dental information alone. Originally, we used DMFT as the input and trained three versions of the model: a 14-class model for NHANES household income brackets, a binary model for whether a person was above or below the federal poverty line, and a regression model for the continuous income-to-poverty ratio.  However, after the inital testing results, we chose to update our model by determining the correlation between dental variables and the income-to-poverty ratio, using 40 variables ranging from the status of individual teeth.  For convience, Table 2 contains a list of the variables used in the updated neural network.
 
-   These networks had three fully connected hidden layers with 128, 64, and 32 units, ReLU activations, and a dropout rate of 0.2 between layers. We trained with Adam at a learning rate of 0.001, a batch size of 32, and up to 50 epochs, with early stopping based on a patience of 10 epochs on a held-out validation set. Each version used the standard loss function for its task: categorical cross-entropy for the multi-class model, binary cross-entropy for the binary model, and mean squared error for the continuous model.
 
-Although this deep learning track was exploratory, it played an important role in shaping the broader project. It helped us become familiar with the NHANES dental and income variables, showed that a single clinical summary such as DMFT contains some information about income on its own, and motivated the broader prediction framework used in the main analysis. It also provides useful context for a larger point that appears throughout the study, namely that in tabular survey data of this size, what can be learned depends not only on the model family but also on the direction of the prediction task [@islr2021].
+|Variable | Correlation with Income-to-Poverty Ratio |
+|:--------|:------------|
+| **`has_dental_implant`** | 0.1159 |
+| **`tooth_02_status`** | 0.1582 |
+| `tooth_03_status` | 0.1814 |
+| `tooth_04_status` | 0.1731 |
+| `tooth_05_status` | 0.1486 |
+| `tooth_06_status` | 0.1574 |
+| `tooth_07_status` | 0.1753 |
+| `tooth_08_status` | 0.1629 |
+| `tooth_09_status` | 0.1503 |
+| `tooth_10_status` | 0.1643 |
+| `tooth_11_status` | 0.1607 |
+| `tooth_12_status` | 0.1423 |
+| `tooth_13_status` | 0.1727 |
+| `tooth_14_status` | 0.1764 |
+| `tooth_15_status` | 0.1730 |
+| `tooth_18_status` | 0.1744 |
+| `tooth_19_status` | 0.1773 |
+| `tooth_20_status` | 0.1622 |
+| `tooth_21_status` | 0.1079 |
+| `tooth_22_status` | 0.1524 |
+| `tooth_23_status` | 0.1331 |
+| `tooth_24_status` | 0.1378 |
+| `tooth_25_status` | 0.1335 |
+| `tooth_26_status` | 0.1347 |
+| `tooth_27_status` | 0.1510 |
+| `tooth_28_status` | 0.1171 |
+| `tooth_29_status` | 0.1588 |
+| `tooth_30_status` | 0.1751 |
+| `tooth_31_status` | 0.1726 |
+| `last_dental_visit` | 0.2857 |
+| `reason_last_dental_visit` | 0.2018 |
+| `needed_dental_care_couldnt_get` | 0.2150 |
+| `self_rated_oral_health` | 0.2770 |
+| `had_oral_cancer_exam` | 0.1853 |
+| `when_last_oral_cancer_exam` | 0.1663 |
+| `teeth_present` | 0.1573 |
+| `teeth_decayed` | 0.1218 |
+| `teeth_filled_sound` | 0.2238 |
+| `teeth_missing_caries` | 0.1544 |
+| `untreated_decay_ratio` | 0.1419 |
+
+: Dental variable with absolute corrlation >= 0.10 with income-to-poverty ratio. {#tbl-dental-corr}
+
+
+Networks were split into different configurations depending on the stage at which we created our neural network.  Models 1, 2 and 3 had three fully connected hidden layers with 128, 64, and 32 units, ReLU activations, and a dropout rate of 0.2 between layers, while models 4, 5 and 6 had three hidden layers with 256, 128, and 64 units in order to account for the additional variables used. We trained all six model with Adam at a learning rate of 0.001, a batch size of 32, and up to 50 epochs, with early stopping based on a patience of 10 epochs on a held-out validation set. Each version used the standard loss function for its task: categorical cross-entropy for the multi-class model, binary cross-entropy for the binary model, and mean squared error for the continuous model.  Table 3 summarize the model configurations below.
+
+
+| Model      |      Task | Hidden Units (h1/h2/h3) | Activation | Optimizer | Learning Rate | Dropout |
+|:------|:-----|:-----------------------:|:----------:|:---------:|:-------------:|:-------:|
+| **Model 1** | Multiclass | 128 / 64 / 32 | `relu` | Adam | 0.001 | 0.2 |
+| **Model 2** | Binary | 128 / 64 / 32 | `relu` | Adam | 0.001 | 0.2 |
+| **Model 3** | Regression | 128 / 64 / 32 | `relu` | Adam | 0.001 | 0.2 |
+| **Model 4** | Multiclass | 256 / 128 / 64 | `relu` | Adam | 0.001 | 0.2 |
+| **Model 5** | Binary | 256 / 128 / 64 | `relu` | Adam | 0.001 | 0.2 |
+| **Model 6** | Regression | 256 / 128 / 64 | `relu` | Adam | 0.001 | 0.2 |
+: Model configurations for all six experiments. Models 1–3 use only `dmft_score` (1 feature); Models 4–6 use all 40 useful dental features. {#tbl-configs}
+
+Although this deep learning track was exploratory, it played an important role in shaping the broader project. It helped us become familiar with the NHANES dental and income variables, and the early models showed that a single clinical summary such as DMFT contains some information about income on its own while models 4, 5 and 6 motivated the broader prediction framework used in the main analysis. It also provides useful context for a larger point that appears throughout the study, namely that in tabular survey data of this size, what can be learned depends not only on the model family but also on the direction of the prediction task [@islr2021].
 
 All models were evaluated using 5-fold cross-validation. For the two classification tasks, we used stratified folds so that each fold preserved the overall class balance. For the regression task, we used standard random folds. Any preprocessing steps, including imputation and scaling, were fit using only the training portion of each fold and then applied to the validation portion, so that no information from the validation data leaked into training.
 
-For the classification tasks, we report balanced accuracy, ROC-AUC, and weighted F1. For the regression task, we report MAE, RMSE, and $R^2$. We treat ROC-AUC as the main classification metric because it does not depend on a single decision threshold and remains informative under mild class imbalance. For the DMFT regression task, we treat MAE as the main metric because it is easy to interpret on the original scale of the outcome, measured in number of teeth, and because it is less affected than RMSE or $R^2$ by the large cluster of cases at `DMFT = 28`.
+For the classification tasks, we report balanced accuracy, ROC-AUC, and weighted F1. For the regression task, we report MAE, RMSE, and $R^2$. We treat ROC-AUC as the main classification metric because it does not depend on a single decision threshold and remains informative under mild class imbalance. For the DMFT regression task, we treat MAE as the main metric because it is easy to interpret on the original scale of the outcome, measured in number of teeth, and because it is less affected than RMSE or $R^2$ by the large cluster of cases at `DMFT = 28`.  For each model, inputs were created to allow each network to track and report a designated measure (Training Accuracy/Loss, Validation Accuracy/Loss, Training MAE, or Validation MAE).
 
 ## Two-stage model for DMFT
 
@@ -224,6 +282,20 @@ One of the clearest findings across the three tasks is how similar the most impo
 ![Top-12 XGBoost feature importances for all three tasks. The leading predictors differ by task: unmet need dominates self-rated health (Task 1), clinical severity signals dominate the examiner's recommendation (Task 2), and age dominates cumulative tooth decay (Task 3).](figures/fig15_feature_importances.png){#fig-importance fig-align="center" width=100%}
 
 This also suggests that one simpler model might capture much of the signal now handled by three separate task-specific models. That approach would likely give up some accuracy for each individual task, but it could still be useful in primary care settings where a simpler screening tool is more practical.
+
+## Neural Network
+
+The results of the neural network models can be split into two groups: the results from only using DMFT score and the results from models that took all 40 significant variables into account.  For the multiclass DMFT model, the training accuracy and validation accuracy were both less than 20%, and despite the varying range of income levels present in the data, everyone was predicted to have made over $75,000 per year regardless of their DMFT score.  For the binary DMFT model, we saw similar results.  Despite the data containing people who were both above and below the poverty line, we found that our model simply predicted that everyone was above the poverty line, suggesting an extremely simple model.  Finally, for the linear DMFT model, we found that despite the variety of income levels present in the data, the model only predicted that everyone had an income-to-poverty ratio between 2 and 3. 
+
+![Binary DMFT model results.  The top row tracks the loss and accuracy of the training and validation models while the bottom row shows confusion matricies of the training, testing, and validation data.  '0' indicates below the poverty line while '1' indicates above the poverty line.](figures/model2results.png){#fig-importance fig-align="center" width=75% fig-pos="H"}
+
+![Regression DMFT model results. The top row tracks the loss and MAE of the training and validation models while the bottom row shows charts of the predicted vs. actual income levels of the training, testing, and validation data.](figures/model3results.png){#fig-importance fig-align="center" width=75% fig-pos="H"}
+
+However, when the neural network models began to include the significant dental variables, our results began to appear more realistic.  With the multiclass significant model, our training model reached an accuracy of around 60% with our validation accuracy reaching near 20%.  For the binary classification model, our validation accuracy was over 83% and was able to identify people who were below the poverty line.  Finally, our regression significant model had our training, testing and validation MAEs between 1.12 and 1.013 and provided a wider spread of predicted values. 
+
+![Binary significant model results.  The top row tracks the loss and accuracy of the training and validation models while the bottom row shows confusion matricies of the training, testing, and validation data.  '0' indicates below the poverty line while '1' indicates above the poverty line.](figures/model5results.png){#fig-importance fig-align="center" width=75% fig-pos="H"}
+
+![Regression significant model results. The top row tracks the loss and MAE of the training and validation models while the bottom row shows charts of the predicted vs. actual income levels of the training, testing, and validation data.](figures/model6results.png){#fig-importance fig-align="center" width=75% fig-pos="H"}
 
 # Discussion
 
